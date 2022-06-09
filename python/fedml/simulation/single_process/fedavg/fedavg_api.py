@@ -1,7 +1,7 @@
 import copy
 import logging
 import random
-
+import joblib
 import numpy as np
 import torch
 import wandb
@@ -246,12 +246,28 @@ class FedAvgAPI(object):
             wandb.log({"Train/Acc": train_acc, "round": round_idx})
             wandb.log({"Train/Loss": train_loss, "round": round_idx})
         logging.info(stats)
+        
+        train_acc_list = np.array(train_metrics['num_correct']) / np.array(train_metrics['num_samples'])
+        logging.info(f"Train/Acc: {train_acc_list.tolist()}")
 
         stats = {"test_acc": test_acc, "test_loss": test_loss}
         if self.args.enable_wandb:
             wandb.log({"Test/Acc": test_acc, "round": round_idx})
             wandb.log({"Test/Loss": test_loss, "round": round_idx})
         logging.info(stats)
+
+        test_acc_list = np.array(test_metrics['num_correct']) / np.array(test_metrics['num_samples'])
+        logging.info(f"Test/Acc: {test_acc_list.tolist()}")
+
+        joblib.dump(
+            {
+                "Test/Acc": test_acc_list.tolist(),
+                "Train/Acc": train_acc_list.tolist(),
+                "Test/Recall": train_local_metrics['test_recall'][1],
+                "Test/Precision": train_local_metrics['test_precision'][1]
+            },
+            open("./.tmp_result.pkl", "wb")
+        )
 
     def _local_test_on_validation_set(self, round_idx):
 

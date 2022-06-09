@@ -3,6 +3,7 @@ from torch import nn
 
 from ....core.alg_frame.client_trainer import ClientTrainer
 import logging
+import numpy as np
 
 
 class MyModelTrainer(ClientTrainer):
@@ -70,8 +71,16 @@ class MyModelTrainer(ClientTrainer):
         model.to(device)
         model.eval()
 
-        metrics = {"test_correct": 0, "test_loss": 0, "test_total": 0}
-
+        metrics = {
+                "test_correct": 0, 
+                "test_loss": 0, 
+                "test_total": 0,
+                "test_recall": {},
+                "test_precision": {},
+                "_test_recall": {},
+                "_test_precision": {}
+            }
+        typ_list = []
         criterion = nn.CrossEntropyLoss().to(device)
 
         with torch.no_grad():
@@ -83,10 +92,34 @@ class MyModelTrainer(ClientTrainer):
 
                 _, predicted = torch.max(pred, -1)
                 correct = predicted.eq(target).sum()
-
+                typ_list += target.tolist()
+                for typ in list(set(target.tolist())):
+                    if typ not in metrics["_test_recall"].keys():
+                        metrics["_test_recall"][typ] = {
+                            "numerator": 0,
+                            "denominator": 0,
+                        }
+                    if typ not in metrics["_test_precision"].keys():
+                        metrics["_test_precision"][typ] = {
+                            "numerator": 0,
+                            "denominator": 0,
+                        }
+                    positive_idxs = np.where(target.numpy() == typ)[0]
+                    true_positive = np.sum(target.numpy()[positive_idxs] == predicted.numpy()[positive_idxs])
+                    all_actually_positive = len(positive_idxs)
+                    all_predicted_positive = len(np.where(predicted.numpy() == typ)[0])
+                    metrics["_test_recall"][typ]["numerator"] += true_positive
+                    metrics["_test_precision"][typ]["numerator"] += true_positive
+                    metrics["_test_recall"][typ]["denominator"] += all_actually_positive
+                    metrics["_test_precision"][typ]["denominator"] += all_predicted_positive
                 metrics["test_correct"] += correct.item()
                 metrics["test_loss"] += loss.item() * target.size(0)
                 metrics["test_total"] += target.size(0)
+        for typ in list(set(typ_list)):
+            metrics["test_recall"][typ] = (metrics["_test_recall"][typ]["numerator"] + 1e-13) / (metrics["_test_recall"][typ]["denominator"] + 1e-13)
+            metrics["test_recall"][typ] = 0 if metrics["test_recall"][typ] < 1e-13 else metrics["test_recall"][typ]
+            metrics["test_precision"][typ] = (metrics["_test_precision"][typ]["numerator"] + 1e-13) / (metrics["_test_precision"][typ]["denominator"] + 1e-13)
+            metrics["test_precision"][typ] = 0 if metrics["test_precision"][typ] < 1e-13 else metrics["test_precision"][typ]
         return metrics
 
     def test_on_the_server(
