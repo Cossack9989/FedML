@@ -2,6 +2,8 @@ import torch
 from torch import nn
 
 from ....core.alg_frame.client_trainer import ClientTrainer
+import copy
+import joblib
 import logging
 import numpy as np
 
@@ -15,7 +17,7 @@ class MyModelTrainer(ClientTrainer):
 
     def train(self, train_data, device, args):
         model = self.model
-
+        global_model = copy.deepcopy(model)
         model.to(device)
         model.train()
 
@@ -33,7 +35,10 @@ class MyModelTrainer(ClientTrainer):
                 weight_decay=args.weight_decay,
                 amsgrad=True,
             )
-
+        zi_dict = {
+            "local": {},
+            "global": {}
+        }
         epoch_loss = []
         for epoch in range(args.epochs):
             batch_loss = []
@@ -41,6 +46,21 @@ class MyModelTrainer(ClientTrainer):
                 x, labels = x.to(device), labels.to(device)
                 model.zero_grad()
                 log_probs = model(x)
+
+                if epoch == args.epochs - 1:
+                    tmp_labels = labels.numpy()
+                    tmp_preds = log_probs
+                    for idx_in_batch in range(len(tmp_labels)):
+                        if tmp_labels[idx_in_batch] not in zi_dict["local"].keys():
+                            zi_dict["local"][tmp_labels[idx_in_batch]] = []
+                        zi_dict["local"][tmp_labels[idx_in_batch]].append(tmp_preds[idx_in_batch])
+
+                    global_preds = global_model(x)
+                    for idx_in_batch in range(len(tmp_labels)):
+                        if tmp_labels[idx_in_batch] not in zi_dict["global"].keys():
+                            zi_dict["global"][tmp_labels[idx_in_batch]] = []
+                        zi_dict["global"][tmp_labels[idx_in_batch]].append(global_preds[idx_in_batch])
+
                 loss = criterion(log_probs, labels)
                 loss.backward()
 
@@ -64,6 +84,8 @@ class MyModelTrainer(ClientTrainer):
                     self.id, epoch, sum(epoch_loss) / len(epoch_loss)
                 )
             )
+        if len(zi_dict["local"]) != 0 and len(zi_dict["global"]) != 0:
+            joblib.dump(zi_dict, f".tmp_z_{self.id}.pkl")
 
     def test(self, test_data, device, args):
         model = self.model
