@@ -190,7 +190,7 @@ class FedAvgAPI(object):
 
         train_metrics = {"num_samples": [], "num_correct": [], "losses": []}
 
-        test_metrics = {"num_samples": [], "num_correct": [], "losses": []}
+        test_metrics = {"num_samples": [], "num_correct": [], "losses": [], "recall": [], "precision": []}
 
         client = self.client_list[0]
 
@@ -230,6 +230,12 @@ class FedAvgAPI(object):
             test_metrics["losses"].append(
                 copy.deepcopy(test_local_metrics["test_loss"])
             )
+            test_metrics["recall"].append(
+                copy.deepcopy(test_local_metrics["test_recall"])
+            )
+            test_metrics["precision"].append(
+                copy.deepcopy(test_local_metrics["test_precision"])
+            )
 
         # test on training dataset
         train_acc = sum(train_metrics["num_correct"]) / sum(
@@ -263,8 +269,8 @@ class FedAvgAPI(object):
             {
                 "Test/Acc": test_acc_list.tolist(),
                 "Train/Acc": train_acc_list.tolist(),
-                "Test/Recall": train_local_metrics['test_recall'][1],
-                "Test/Precision": train_local_metrics['test_precision'][1]
+                "Test/Recall": test_metrics['recall'],
+                "Test/Precision": test_metrics['precision']
             },
             open("./.tmp_result.pkl", "wb")
         )

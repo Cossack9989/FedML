@@ -45,21 +45,26 @@ class MyModelTrainer(ClientTrainer):
             for batch_idx, (x, labels) in enumerate(train_data):
                 x, labels = x.to(device), labels.to(device)
                 model.zero_grad()
-                log_probs = model(x)
-
-                if epoch == args.epochs - 1:
+                
+                pred_res = model(x)
+                if isinstance(pred_res, tuple) and len(pred_res) == 2:
+                    middle_preds, log_probs = pred_res[0], pred_res[1]
+                else:
+                    log_probs = pred_res
+                
+                if epoch == args.epochs - 1 and isinstance(pred_res, tuple) and len(pred_res) == 2:
                     tmp_labels = labels.numpy()
-                    tmp_preds = log_probs
+                    tmp_preds = middle_preds
                     for idx_in_batch in range(len(tmp_labels)):
                         if tmp_labels[idx_in_batch] not in zi_dict["local"].keys():
                             zi_dict["local"][tmp_labels[idx_in_batch]] = []
                         zi_dict["local"][tmp_labels[idx_in_batch]].append(tmp_preds[idx_in_batch])
 
-                    global_preds = global_model(x)
+                    global_middle_preds, _ = global_model(x)
                     for idx_in_batch in range(len(tmp_labels)):
                         if tmp_labels[idx_in_batch] not in zi_dict["global"].keys():
                             zi_dict["global"][tmp_labels[idx_in_batch]] = []
-                        zi_dict["global"][tmp_labels[idx_in_batch]].append(global_preds[idx_in_batch])
+                        zi_dict["global"][tmp_labels[idx_in_batch]].append(global_middle_preds[idx_in_batch])
 
                 loss = criterion(log_probs, labels)
                 loss.backward()
@@ -109,7 +114,11 @@ class MyModelTrainer(ClientTrainer):
             for batch_idx, (x, target) in enumerate(test_data):
                 x = x.to(device)
                 target = target.to(device)
-                pred = model(x)
+                pred_res = model(x)
+                if isinstance(pred_res, tuple) and len(pred_res) == 2:
+                    pred = pred_res[1]
+                else:
+                    pred = pred_res
                 loss = criterion(pred, target)
 
                 _, predicted = torch.max(pred, -1)
