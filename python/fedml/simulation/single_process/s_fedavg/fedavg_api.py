@@ -27,7 +27,9 @@ class S_FedAvgAPI(object):
             train_data_local_dict,
             test_data_local_dict,
             class_num,
-            valid_data_in_aggregator
+            valid_data_in_aggregator,
+            alpha,
+            beta
         ] = dataset
         self.train_global = train_data_global
         self.test_global = test_data_global
@@ -35,6 +37,10 @@ class S_FedAvgAPI(object):
         self.train_data_num_in_total = train_data_num
         self.test_data_num_in_total = test_data_num
         self.global_valid_data = valid_data_in_aggregator
+        self.arguments = {
+            "alpha": alpha,
+            "beta": beta
+        }
 
         self.client_list = []
         self.train_data_local_num_dict = train_data_local_num_dict
@@ -82,9 +88,16 @@ class S_FedAvgAPI(object):
         logging.info("############setup_clients (END)#############")
 
     def train(self):
+
         logging.info("self.model_trainer = {}".format(self.model_trainer))
         w_global = self.model_trainer.get_model_params()
-        phi = [1/self.args.client_num_in_total] * self.args.client_num_in_total
+
+        K = self.args.client_num_in_total
+        alpha = self.arguments["alpha"]
+        beta = self.arguments["beta"]
+        phi = [1 / K] * K
+        sv = [(1 - alpha) / (K * beta)] * K
+
         for round_idx in range(self.args.comm_round):
 
             logging.info("################Communication round : {}".format(round_idx))
@@ -123,7 +136,7 @@ class S_FedAvgAPI(object):
                 tmp_client_idx_list = list(range(len(self.client_list)))
                 del tmp_client_idx_list[idx]
 
-                alpha = 0
+                ap = 0
                 cnt = 0
 
                 for left_client_num in range(1, len(self.client_list)):
@@ -142,10 +155,11 @@ class S_FedAvgAPI(object):
                         tmp_m_part = self._valid_test_on_aggregator(
                             tmp_model_trainer.model, self.global_valid_data, self.device)
 
-                        alpha += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part["test_total"]
+                        ap += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part["test_total"]
 
                 assert cnt != 0
-                alpha /= cnt
+                sv[idx] += (ap / cnt)
+                phi[idx] = alpha * phi[idx] + beta * sv[idx]
 
             # update global weights
             w_global = self._aggregate(w_locals)
