@@ -1,16 +1,16 @@
 import copy
-import logging
 import random
 import joblib
 import numpy as np
 import torch
 import wandb
+import logging
 
+from itertools import combinations
 from .client import Client
 from .my_model_trainer_classification import MyModelTrainer as MyModelTrainerCLS
 from .my_model_trainer_nwp import MyModelTrainer as MyModelTrainerNWP
 from .my_model_trainer_tag_prediction import MyModelTrainer as MyModelTrainerTAG
-import logging
 
 
 class S_FedAvgAPI(object):
@@ -116,20 +116,36 @@ class S_FedAvgAPI(object):
                 w_locals.append((client.get_sample_number(), copy.deepcopy(w)))
 
             for idx, client in enumerate(self.client_list):
+
                 # calculate shapley
-                tmp_w_locals = copy.deepcopy(w_locals)
-                tmp_model_trainer = copy.deepcopy(self.model_trainer)
                 logging.info(f"calculating shapley of client {idx}")
+                tmp_w_locals = copy.deepcopy(w_locals)
+                tmp_client_idx_list = list(range(len(self.client_list)))
+                del tmp_client_idx_list[idx]
 
-                tmp_w_full = self._aggregate(tmp_w_locals)
-                tmp_model_trainer.set_model_params(tmp_w_full)
-                tmp_m_full = self._valid_test_on_aggregator(tmp_model_trainer.model, self.global_valid_data)
+                alpha = 0
+                cnt = 0
 
-                del tmp_w_locals[idx]
-                tmp_w_part = self._aggregate(tmp_w_locals)
-                tmp_model_trainer.set_model_params(tmp_w_part)
-                tmp_m_part = self._valid_test_on_aggregator(tmp_model_trainer.model, self.global_valid_data)
+                for left_client_num in range(1, len(self.client_list)):
+                    combs = list(combinations(tmp_client_idx_list, left_client_num))
+                    cnt += len(combs)
+                    for client_set in combs:
+                        tmp_w_part = np.array(tmp_w_locals)[np.array(client_set)].tolist()
+                        tmp_w_full = tmp_w_part + [tmp_w_locals[idx]]
+                        tmp_model_trainer = copy.deepcopy(self.model_trainer)
 
+                        tmp_model_trainer.set_model_params(tmp_w_full)
+                        tmp_m_full = self._valid_test_on_aggregator(
+                            tmp_model_trainer.model, self.global_valid_data, self.device)
+
+                        tmp_model_trainer.set_model_params(tmp_w_part)
+                        tmp_m_part = self._valid_test_on_aggregator(
+                            tmp_model_trainer.model, self.global_valid_data, self.device)
+
+                        alpha += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part["test_total"]
+
+                assert cnt != 0
+                alpha /= cnt
 
             # update global weights
             w_global = self._aggregate(w_locals)
@@ -146,9 +162,34 @@ class S_FedAvgAPI(object):
                 else:
                     self._local_test_on_all_clients(round_idx)
 
-    def _valid_test_on_aggregator(self, model: torch.nn.Module, data):
-        metrics = {}
+    def _valid_test_on_aggregator(self, model: torch.nn.Module, data, device):
+        metrics = {
+            "test_correct": 0,
+            "test_loss": 0,
+            "test_total": 0
+        }
+        criterion = torch.nn.CrossEntropyLoss().to(device)
         model.eval()
+
+        with torch.no_grad():
+            for batch_idx, (x, target) in enumerate(data):
+                x = x.to(device)
+                target = target.to(device)
+                pred_res = model(x)
+                if isinstance(pred_res, tuple) and len(pred_res) == 2:
+                    pred = pred_res[1]
+                else:
+                    pred = pred_res
+                loss = criterion(pred, target)
+
+                _, predicted = torch.max(pred, 1)
+                target_pos = ~(target == 0)
+                correct = (predicted.eq(target) * target_pos).sum()
+
+                metrics["test_correct"] += correct.item()
+                metrics["test_loss"] += loss.item() * target.size(0)
+                metrics["test_total"] += target_pos.sum().item()
+
         return metrics
 
     def _client_sampling(self, round_idx, client_num_in_total, client_num_per_round):
