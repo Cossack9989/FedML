@@ -143,15 +143,19 @@ class S_FedAvgAPI(object):
                     combs = list(combinations(tmp_client_idx_list, left_client_num))
                     cnt += len(combs)
                     for client_set in combs:
+                        client_set = list(client_set)
                         tmp_w_part = np.array(tmp_w_locals)[np.array(client_set)].tolist()
+                        tmp_w_part = [tuple(elem) for elem in tmp_w_part]
                         tmp_w_full = tmp_w_part + [tmp_w_locals[idx]]
                         tmp_model_trainer = copy.deepcopy(self.model_trainer)
 
-                        tmp_model_trainer.set_model_params(tmp_w_full)
+                        tmp_w_fake_global_full = self._aggregate(tmp_w_full)
+                        tmp_model_trainer.set_model_params(tmp_w_fake_global_full)
                         tmp_m_full = self._valid_test_on_aggregator(
                             tmp_model_trainer.model, self.global_valid_data, self.device)
 
-                        tmp_model_trainer.set_model_params(tmp_w_part)
+                        tmp_w_fake_global_part = self._aggregate(tmp_w_part)
+                        tmp_model_trainer.set_model_params(tmp_w_fake_global_part)
                         tmp_m_part = self._valid_test_on_aggregator(
                             tmp_model_trainer.model, self.global_valid_data, self.device)
 
@@ -160,6 +164,7 @@ class S_FedAvgAPI(object):
                 assert cnt != 0
                 sv[idx] += (ap / cnt)
                 phi[idx] = alpha * phi[idx] + beta * sv[idx]
+                logging.info(f"Client {idx} sv={sv[idx]} phi={phi[idx]}")
 
             # update global weights
             w_global = self._aggregate(w_locals)
@@ -196,13 +201,12 @@ class S_FedAvgAPI(object):
                     pred = pred_res
                 loss = criterion(pred, target)
 
-                _, predicted = torch.max(pred, 1)
-                target_pos = ~(target == 0)
-                correct = (predicted.eq(target) * target_pos).sum()
+                _, predicted = torch.max(pred, -1)
+                correct = predicted.eq(target).sum()
 
                 metrics["test_correct"] += correct.item()
                 metrics["test_loss"] += loss.item() * target.size(0)
-                metrics["test_total"] += target_pos.sum().item()
+                metrics["test_total"] += target.size(0)
 
         return metrics
 
