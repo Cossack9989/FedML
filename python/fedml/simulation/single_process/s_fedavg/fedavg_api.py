@@ -109,7 +109,7 @@ class S_FedAvgAPI(object):
             Instead of changing the 'Client' instances, our implementation keeps the 'Client' instances and then updates their local dataset 
             """
             client_indexes = self._client_sampling(
-                round_idx, self.args.client_num_in_total, self.args.client_num_per_round
+                round_idx, self.args.client_num_in_total, self.args.client_num_per_round, phi
             )
             logging.info("client_indexes = " + str(client_indexes))
 
@@ -162,9 +162,10 @@ class S_FedAvgAPI(object):
                         ap += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part["test_total"]
 
                 assert cnt != 0
-                sv[idx] += (ap / cnt)
-                phi[idx] = alpha * phi[idx] + beta * sv[idx]
-                logging.info(f"Client {idx} sv={sv[idx]} phi={phi[idx]}")
+                client_idx = client_indexes[idx]
+                sv[client_idx] += (ap / cnt)
+                phi[client_idx] = alpha * phi[client_idx] + beta * sv[client_idx]
+                logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
 
             # update global weights
             w_global = self._aggregate(w_locals)
@@ -210,19 +211,20 @@ class S_FedAvgAPI(object):
 
         return metrics
 
-    def _client_sampling(self, round_idx, client_num_in_total, client_num_per_round):
+    def _client_sampling(self, round_idx, client_num_in_total, client_num_per_round, phi):
         if client_num_in_total == client_num_per_round:
             client_indexes = [
                 client_index for client_index in range(client_num_in_total)
             ]
         else:
             num_clients = min(client_num_per_round, client_num_in_total)
-            np.random.seed(
-                round_idx
-            )  # make sure for each comparison, we are selecting the same clients each round
-            client_indexes = np.random.choice(
-                range(client_num_in_total), num_clients, replace=False
-            )
+            # np.random.seed(
+            #     round_idx
+            # )  # make sure for each comparison, we are selecting the same clients each round
+            # client_indexes = np.random.choice(
+            #     range(client_num_in_total), num_clients, replace=False
+            # )
+            client_indexes = np.argsort(phi)[-num_clients:]
         logging.info("client_indexes = %s" % str(client_indexes))
         return client_indexes
 
