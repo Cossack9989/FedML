@@ -359,7 +359,7 @@ class S_FedAvgAPI(object):
                 "Test/Recall": test_metrics['recall'],
                 "Test/Precision": test_metrics['precision']
             },
-            open("./.tmp_result.pkl", "wb")
+            open(f"./.tmp_result.{round_idx}.pkl", "wb")
         )
 
     def _local_test_on_validation_set(self, round_idx):
