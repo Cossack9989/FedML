@@ -84,11 +84,11 @@ class MyModelTrainer(ClientTrainer):
                 # )
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss) / len(batch_loss))
-            logging.info(
-                "Client Index = {}\tEpoch: {}\tLoss: {:.6f}".format(
-                    self.id, epoch, sum(epoch_loss) / len(epoch_loss)
-                )
-            )
+            # logging.info(
+            #     "Client Index = {}\tEpoch: {}\tLoss: {:.6f}".format(
+            #         self.id, epoch, sum(epoch_loss) / len(epoch_loss)
+            #     )
+            # )
         if len(zi_dict["local"]) != 0 and len(zi_dict["global"]) != 0:
             joblib.dump(zi_dict, f".tmp_z_{self.id}.pkl")
 
