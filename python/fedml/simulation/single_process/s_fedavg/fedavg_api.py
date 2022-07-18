@@ -95,6 +95,8 @@ class S_FedAvgAPI(object):
         K = self.args.client_num_in_total
         alpha = self.arguments["alpha"]
         beta = self.arguments["beta"]
+        phi_dict = {}
+        res_dict = {}
         phi = [1 / K] * K
         sv = [(1 - alpha) / (K * beta)] * K
 
@@ -131,7 +133,7 @@ class S_FedAvgAPI(object):
             for idx, client in enumerate(self.client_list):
 
                 # calculate shapley
-                logging.info(f"calculating shapley of client {idx}")
+                # logging.info(f"calculating shapley of client {idx}")
                 tmp_w_locals = copy.deepcopy(w_locals)
                 tmp_client_idx_list = list(range(len(self.client_list)))
                 del tmp_client_idx_list[idx]
@@ -174,13 +176,17 @@ class S_FedAvgAPI(object):
             # test results
             # at last round
             if round_idx == self.args.comm_round - 1:
-                self._local_test_on_all_clients(round_idx)
+                res_dict[round_idx] = self._local_test_on_all_clients(round_idx)
             # per {frequency_of_the_test} round
             elif round_idx % self.args.frequency_of_the_test == 0:
                 if self.args.dataset.startswith("stackoverflow"):
                     self._local_test_on_validation_set(round_idx)
                 else:
-                    self._local_test_on_all_clients(round_idx)
+                    res_dict[round_idx] = self._local_test_on_all_clients(round_idx)
+
+            phi_dict[round_idx] = copy.deepcopy(phi)
+        joblib.dump(phi_dict, ".tmp_phi.pkl")
+        joblib.dump(res_dict, ".tmp_res.pkl")
 
     def _valid_test_on_aggregator(self, model: torch.nn.Module, data, device):
         metrics = {
@@ -218,13 +224,13 @@ class S_FedAvgAPI(object):
             ]
         else:
             num_clients = min(client_num_per_round, client_num_in_total)
-            # np.random.seed(
-            #     round_idx
-            # )  # make sure for each comparison, we are selecting the same clients each round
-            # client_indexes = np.random.choice(
-            #     range(client_num_in_total), num_clients, replace=False
-            # )
-            client_indexes = np.argsort(phi)[-num_clients:]
+            if len(set(phi)) == 1:
+                np.random.seed(round_idx)
+                client_indexes = np.random.choice(
+                    range(client_num_in_total), num_clients, replace=False
+                )
+            else:
+                client_indexes = np.argsort(phi)[-num_clients:]
         logging.info("client_indexes = %s" % str(client_indexes))
         return client_indexes
 
@@ -352,15 +358,12 @@ class S_FedAvgAPI(object):
         test_acc_list = np.array(test_metrics['num_correct']) / np.array(test_metrics['num_samples'])
         logging.info(f"Test/Acc: {test_acc_list.tolist()}")
 
-        joblib.dump(
-            {
+        return {
                 "Test/Acc": test_acc_list.tolist(),
                 "Train/Acc": train_acc_list.tolist(),
                 "Test/Recall": test_metrics['recall'],
                 "Test/Precision": test_metrics['precision']
-            },
-            open(f"./.tmp_result.{round_idx}.pkl", "wb")
-        )
+        }
 
     def _local_test_on_validation_set(self, round_idx):
 
