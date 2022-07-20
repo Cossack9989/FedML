@@ -97,6 +97,7 @@ class S_FedAvgAPI(object):
         beta = self.arguments["beta"]
         phi_dict = {}
         res_dict = {}
+        sv_dict = {}
         phi = [1 / K] * K
         sv = [(1 - alpha) / (K * beta)] * K
 
@@ -185,8 +186,10 @@ class S_FedAvgAPI(object):
                     res_dict[round_idx] = self._local_test_on_all_clients(round_idx)
 
             phi_dict[round_idx] = copy.deepcopy(phi)
+            sv_dict[round_idx] = copy.deepcopy(sv)
         joblib.dump(phi_dict, ".tmp_phi.pkl")
         joblib.dump(res_dict, ".tmp_res.pkl")
+        joblib.dump(sv_dict, ".tmp_sv.pkl")
 
     def _valid_test_on_aggregator(self, model: torch.nn.Module, data, device):
         metrics = {
