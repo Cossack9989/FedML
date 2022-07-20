@@ -98,6 +98,7 @@ class S_FedAvgAPI(object):
         phi_dict = {}
         res_dict = {}
         sv_dict = {}
+        client_dict = {}
         phi = [1 / K] * K
         sv = [(1 - alpha) / (K * beta)] * K
 
@@ -106,6 +107,7 @@ class S_FedAvgAPI(object):
             logging.info("################Communication round : {}".format(round_idx))
 
             w_locals = []
+            client_dict[round_idx] = {}
 
             """
             for scalability: following the original FedAvg algorithm, we uniformly sample a fraction of clients in each round.
@@ -170,6 +172,15 @@ class S_FedAvgAPI(object):
                 phi[client_idx] = alpha * phi[client_idx] + beta * sv[client_idx]
                 logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
 
+                tmp_w_single = self._aggregate(copy.deepcopy([tmp_w_locals[idx]]))
+                tmp_model_trainer = copy.deepcopy(self.model_trainer)
+                tmp_model_trainer.set_model_params(tmp_w_single)
+                tmp_m_single = self._valid_test_on_aggregator(
+                    tmp_model_trainer.model, self.global_valid_data, self.device
+                )
+                tmp_client_accuracy = tmp_m_single["test_correct"] / tmp_m_single["test_total"]
+                client_dict[round_idx][client_idx] = tmp_client_accuracy
+
             # update global weights
             w_global = self._aggregate(w_locals)
             self.model_trainer.set_model_params(w_global)
@@ -190,6 +201,7 @@ class S_FedAvgAPI(object):
         joblib.dump(phi_dict, ".tmp_phi.pkl")
         joblib.dump(res_dict, ".tmp_res.pkl")
         joblib.dump(sv_dict, ".tmp_sv.pkl")
+        joblib.dump(client_dict, ".tmp_client.pkl")
 
     def _valid_test_on_aggregator(self, model: torch.nn.Module, data, device):
         metrics = {
