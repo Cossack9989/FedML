@@ -152,13 +152,14 @@ class S_FedAvgAPI(object):
                         tmp_w_part = np.array(tmp_w_locals)[np.array(client_set)].tolist()
                         tmp_w_part = [tuple(elem) for elem in tmp_w_part]
                         tmp_w_full = tmp_w_part + [tmp_w_locals[idx]]
-                        tmp_model_trainer = copy.deepcopy(self.model_trainer)
 
+                        tmp_model_trainer = copy.deepcopy(self.model_trainer)
                         tmp_w_fake_global_full = self._aggregate(tmp_w_full)
                         tmp_model_trainer.set_model_params(tmp_w_fake_global_full)
                         tmp_m_full = self._valid_test_on_aggregator(
                             tmp_model_trainer.model, self.global_valid_data, self.device)
 
+                        tmp_model_trainer = copy.deepcopy(self.model_trainer)
                         tmp_w_fake_global_part = self._aggregate(tmp_w_part)
                         tmp_model_trainer.set_model_params(tmp_w_fake_global_part)
                         tmp_m_part = self._valid_test_on_aggregator(
@@ -217,10 +218,10 @@ class S_FedAvgAPI(object):
                 x = x.to(device)
                 target = target.to(device)
                 pred_res = model(x)
-                if isinstance(pred_res, tuple) and len(pred_res) == 2:
-                    pred = pred_res[1]
-                else:
-                    pred = pred_res
+                # if isinstance(pred_res, tuple) and len(pred_res) == 2:
+                #     pred = pred_res[1]
+                # else:
+                pred = pred_res
                 loss = criterion(pred, target)
 
                 _, predicted = torch.max(pred, -1)
