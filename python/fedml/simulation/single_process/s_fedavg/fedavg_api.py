@@ -7,6 +7,8 @@ import wandb
 import logging
 
 from itertools import combinations
+from collections import Counter
+from sklearn.utils.class_weight import compute_class_weight
 from .client import Client
 from .my_model_trainer_classification import MyModelTrainer as MyModelTrainerCLS
 from .my_model_trainer_nwp import MyModelTrainer as MyModelTrainerNWP
@@ -82,10 +84,25 @@ class S_FedAvgAPI(object):
                 self.args,
                 self.device,
                 model_trainer,
-                self.global_valid_data
+                self.global_valid_data,
+                self.calc_class_weight(self.train_data_local_dict[client_idx])
             )
             self.client_list.append(c)
         logging.info("############setup_clients (END)#############")
+
+    def calc_class_weight(self, train_data):
+        y = []
+        for batch in train_data:
+            y += batch[1].numpy().tolist()
+        class_weight = []
+        for _class in range(5):
+            if _class not in y:
+                class_weight.append(0)
+            else:
+                weight = len(y) / (len(np.unique(y)) * Counter(y)[_class])
+                class_weight.append(weight)
+        # class_weight = compute_class_weight(class_weight='balanced', classes=classes, y=y)
+        return torch.tensor(np.array(class_weight), dtype=torch.float)
 
     def train(self):
 
@@ -126,6 +143,7 @@ class S_FedAvgAPI(object):
                     self.train_data_local_dict[client_idx],
                     self.test_data_local_dict[client_idx],
                     self.train_data_local_num_dict[client_idx],
+                    self.calc_class_weight(self.train_data_local_dict[client_idx])
                 )
 
                 # train on new dataset
@@ -240,13 +258,35 @@ class S_FedAvgAPI(object):
             ]
         else:
             num_clients = min(client_num_per_round, client_num_in_total)
-            if len(set(phi)) == 1:
+
+            if self.args.dataset == "mit-bih-0723" and client_num_in_total == 28 and num_clients == 5:
+                whole_list = [35, 0, 11, 20, 21, 22, 28, 33, 36, 3, 4, 5, 7, 8, 10, 12, 15, 17, 18, 23, 25, 26, 27, 29, 31, 34, 38, 42]
+                client_indexes = [whole_list.index(35)]
+                client_indexes += np.random.choice(
+                    range(1, 9), 2, replace=False
+                ).tolist()
+                client_indexes += np.random.choice(
+                    range(9, 28), 2, replace=False
+                ).tolist()
+                client_indexes = np.array(client_indexes)
+            elif len(set(phi)) == 1:
                 np.random.seed(round_idx)
                 client_indexes = np.random.choice(
                     range(client_num_in_total), num_clients, replace=False
                 )
             else:
-                client_indexes = np.argsort(phi)[-num_clients:]
+                # sorted_indexes = np.argsort(phi, kind=random.choice([
+                #     'quicksort', 'mergesort', 'heapsort', 'stable'
+                # ])).tolist()
+                # client_indexes = []
+                # for client_idx in range(num_clients):
+                #     client_indexes.append(
+                #         sorted_indexes[client_idx * int(client_num_in_total/client_num_per_round)]
+                #     )
+                # client_indexes = np.array(client_indexes)
+                client_indexes = np.argsort(phi, kind=random.choice([
+                    'quicksort', 'mergesort', 'heapsort', 'stable'
+                ]))[-num_clients:]
         logging.info("client_indexes = %s" % str(client_indexes))
         return client_indexes
 
@@ -315,6 +355,7 @@ class S_FedAvgAPI(object):
                 self.train_data_local_dict[client_idx],
                 self.test_data_local_dict[client_idx],
                 self.train_data_local_num_dict[client_idx],
+                self.calc_class_weight(self.train_data_local_dict[client_idx])
             )
             # train data
             train_local_metrics = client.local_test(False)

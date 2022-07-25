@@ -9,6 +9,7 @@ class Client:
         device,
         model_trainer,
         global_valid_data,
+        class_weight
     ):
         self.client_idx = client_idx
         self.local_training_data = local_training_data
@@ -19,14 +20,16 @@ class Client:
         self.device = device
         self.model_trainer = model_trainer
         self.global_valid_data = global_valid_data
+        self.local_class_weight = class_weight
 
     def update_local_dataset(
-        self, client_idx, local_training_data, local_test_data, local_sample_number
+        self, client_idx, local_training_data, local_test_data, local_sample_number, class_weight
     ):
         self.client_idx = client_idx
         self.local_training_data = local_training_data
         self.local_test_data = local_test_data
         self.local_sample_number = local_sample_number
+        self.local_class_weight = class_weight
 
     def get_sample_number(self):
         return self.local_sample_number
@@ -34,7 +37,7 @@ class Client:
     def train(self, w_global):
         self.model_trainer.set_model_params(w_global)
         self.model_trainer.set_id(self.client_idx)
-        self.model_trainer.train(self.local_training_data, self.device, self.args)
+        self.model_trainer.train(self.local_training_data, self.local_class_weight, self.device, self.args)
         weights = self.model_trainer.get_model_params()
         # metrics = self.model_trainer.test(self.global_valid_data, self.device, self.args)
         return weights
