@@ -95,7 +95,11 @@ class S_FedAvgAPI(object):
         for batch in train_data:
             y += batch[1].numpy().tolist()
         class_weight = []
-        for _class in range(5):
+        if self.args.dataset in ["mit-bih", "mit-bih-0723"]:
+            class_num = 5
+        elif self.args.dataset in ["minst", "cifar10"]:
+            class_num = 10
+        for _class in range(class_num):
             if _class not in y:
                 class_weight.append(0)
             else:
