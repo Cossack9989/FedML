@@ -99,6 +99,10 @@ class S_FedAvgAPI(object):
             class_num = 5
         elif self.args.dataset in ["minst", "cifar10"]:
             class_num = 10
+        else:
+            class_num = 0
+            logging.info("not support")
+            exit(0)
         for _class in range(class_num):
             if _class not in y:
                 class_weight.append(0)
