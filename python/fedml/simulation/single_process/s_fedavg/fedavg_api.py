@@ -97,7 +97,7 @@ class S_FedAvgAPI(object):
         class_weight = []
         if self.args.dataset in ["mit-bih", "mit-bih-0723"]:
             class_num = 5
-        elif self.args.dataset in ["minst", "cifar10"]:
+        elif self.args.dataset in ["mnist", "cifar10"]:
             class_num = 10
         else:
             class_num = 0
