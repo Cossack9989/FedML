@@ -90,6 +90,7 @@ class S_FedAvgAPI(object):
             self.client_list.append(c)
         logging.info("############setup_clients (END)#############")
 
+    # 每个节点每个class的权重为该节点数据总量 /（该节点内有几种class * 该节点内该class样本数量）
     def calc_class_weight(self, train_data):
         y = []
         for batch in train_data:
