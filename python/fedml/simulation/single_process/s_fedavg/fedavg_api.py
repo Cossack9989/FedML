@@ -96,10 +96,12 @@ class S_FedAvgAPI(object):
         for batch in train_data:
             y += batch[1].numpy().tolist()
         class_weight = []
-        if self.args.dataset in ["mit-bih", "mit-bih-0723"]:
+        if self.args.dataset in ["mit-bih"]:
             class_num = 5
         elif self.args.dataset in ["mnist", "cifar10"]:
             class_num = 10
+        elif self.args.dataset in ["kag-nih"]:
+            class_num = 12
         else:
             class_num = 0
             logging.info("not support")
@@ -170,10 +172,12 @@ class S_FedAvgAPI(object):
 
                 ap = 0
                 cnt = 0
-
+                total_combs = []
                 for left_client_num in range(1, len(self.client_list)):
                     combs = list(combinations(tmp_client_idx_list, left_client_num))
                     cnt += len(combs)
+                    total_combs += list(combinations(tmp_client_idx_list, left_client_num))
+
                     for client_set in combs:
                         client_set = list(client_set)
                         tmp_w_part = np.array(tmp_w_locals)[np.array(client_set)].tolist()
@@ -196,9 +200,7 @@ class S_FedAvgAPI(object):
 
                 assert cnt != 0
                 client_idx = client_indexes[idx]
-                sv[client_idx] += (ap / cnt)
-                phi[client_idx] = alpha * phi[client_idx] + beta * sv[client_idx]
-                logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
+                # sv[client_idx] += (ap / cnt)
 
                 tmp_w_single = self._aggregate(copy.deepcopy([tmp_w_locals[idx]]))
                 tmp_model_trainer = copy.deepcopy(self.model_trainer)
@@ -208,6 +210,12 @@ class S_FedAvgAPI(object):
                 )
                 tmp_client_accuracy = tmp_m_single["test_correct"] / tmp_m_single["test_total"]
                 client_dict[round_idx][client_idx] = tmp_client_accuracy
+                ap += tmp_client_accuracy
+                cnt += 1
+                # sv[client_idx] = (ap / cnt)
+                sv[client_idx] += (ap / cnt)
+                phi[client_idx] = alpha * phi[client_idx] + beta * sv[client_idx]
+                logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
 
             # update global weights
             w_global = self._aggregate(w_locals)
@@ -268,17 +276,7 @@ class S_FedAvgAPI(object):
         else:
             num_clients = min(client_num_per_round, client_num_in_total)
 
-            if self.args.dataset == "mit-bih-0723" and client_num_in_total == 28 and num_clients == 5:
-                whole_list = [35, 0, 11, 20, 21, 22, 28, 33, 36, 3, 4, 5, 7, 8, 10, 12, 15, 17, 18, 23, 25, 26, 27, 29, 31, 34, 38, 42]
-                client_indexes = [whole_list.index(35)]
-                client_indexes += np.random.choice(
-                    range(1, 9), 2, replace=False
-                ).tolist()
-                client_indexes += np.random.choice(
-                    range(9, 28), 2, replace=False
-                ).tolist()
-                client_indexes = np.array(client_indexes)
-            elif len(set(phi)) == 1:
+            if len(set(phi)) == 1:
                 np.random.seed(round_idx)
                 client_indexes = np.random.choice(
                     range(client_num_in_total), num_clients, replace=False

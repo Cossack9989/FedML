@@ -80,6 +80,7 @@ class FedAvgAPI(object):
     def train(self):
         logging.info("self.model_trainer = {}".format(self.model_trainer))
         w_global = self.model_trainer.get_model_params()
+        res_dict = {}
         for round_idx in range(self.args.comm_round):
 
             logging.info("################Communication round : {}".format(round_idx))
@@ -117,13 +118,15 @@ class FedAvgAPI(object):
             # test results
             # at last round
             if round_idx == self.args.comm_round - 1:
-                self._local_test_on_all_clients(round_idx)
+                res_dict[round_idx] = self._local_test_on_all_clients(round_idx)
             # per {frequency_of_the_test} round
             elif round_idx % self.args.frequency_of_the_test == 0:
                 if self.args.dataset.startswith("stackoverflow"):
                     self._local_test_on_validation_set(round_idx)
                 else:
-                    self._local_test_on_all_clients(round_idx)
+                    res_dict[round_idx] = self._local_test_on_all_clients(round_idx)
+
+        joblib.dump(res_dict, ".tmp_res2.pkl")
 
     def _client_sampling(self, round_idx, client_num_in_total, client_num_per_round):
         if client_num_in_total == client_num_per_round:
@@ -265,15 +268,12 @@ class FedAvgAPI(object):
         test_acc_list = np.array(test_metrics['num_correct']) / np.array(test_metrics['num_samples'])
         logging.info(f"Test/Acc: {test_acc_list.tolist()}")
 
-        joblib.dump(
-            {
+        return {
                 "Test/Acc": test_acc_list.tolist(),
                 "Train/Acc": train_acc_list.tolist(),
                 "Test/Recall": test_metrics['recall'],
                 "Test/Precision": test_metrics['precision']
-            },
-            open("./.tmp_result.pkl", "wb")
-        )
+            }
 
     def _local_test_on_validation_set(self, round_idx):
 
