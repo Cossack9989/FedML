@@ -212,8 +212,8 @@ class S_FedAvgAPI(object):
                 client_dict[round_idx][client_idx] = tmp_client_accuracy
                 ap += tmp_client_accuracy
                 cnt += 1
-                # sv[client_idx] = (ap / cnt)
-                sv[client_idx] += (ap / cnt)
+                sv[client_idx] = (ap / cnt)
+                # sv[client_idx] += (ap / cnt)
                 phi[client_idx] = alpha * phi[client_idx] + beta * sv[client_idx]
                 logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
 
