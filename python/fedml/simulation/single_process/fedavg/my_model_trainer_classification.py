@@ -47,24 +47,24 @@ class MyModelTrainer(ClientTrainer):
                 model.zero_grad()
                 
                 pred_res = model(x)
-                if isinstance(pred_res, tuple) and len(pred_res) == 2:
-                    middle_preds, log_probs = pred_res[0], pred_res[1]
-                else:
-                    log_probs = pred_res
+                # if isinstance(pred_res, tuple) and len(pred_res) == 2:
+                #     middle_preds, log_probs = pred_res[0], pred_res[1]
+                # else:
+                log_probs = pred_res
                 
-                if epoch == args.epochs - 1 and isinstance(pred_res, tuple) and len(pred_res) == 2:
-                    tmp_labels = labels.numpy()
-                    tmp_preds = middle_preds
-                    for idx_in_batch in range(len(tmp_labels)):
-                        if tmp_labels[idx_in_batch] not in zi_dict["local"].keys():
-                            zi_dict["local"][tmp_labels[idx_in_batch]] = []
-                        zi_dict["local"][tmp_labels[idx_in_batch]].append(tmp_preds[idx_in_batch])
-
-                    global_middle_preds, _ = global_model(x)
-                    for idx_in_batch in range(len(tmp_labels)):
-                        if tmp_labels[idx_in_batch] not in zi_dict["global"].keys():
-                            zi_dict["global"][tmp_labels[idx_in_batch]] = []
-                        zi_dict["global"][tmp_labels[idx_in_batch]].append(global_middle_preds[idx_in_batch])
+                # if epoch == args.epochs - 1 and isinstance(pred_res, tuple) and len(pred_res) == 2:
+                #     tmp_labels = labels.numpy()
+                #     tmp_preds = middle_preds
+                #     for idx_in_batch in range(len(tmp_labels)):
+                #         if tmp_labels[idx_in_batch] not in zi_dict["local"].keys():
+                #             zi_dict["local"][tmp_labels[idx_in_batch]] = []
+                #         zi_dict["local"][tmp_labels[idx_in_batch]].append(tmp_preds[idx_in_batch])
+                #
+                #     global_middle_preds, _ = global_model(x)
+                #     for idx_in_batch in range(len(tmp_labels)):
+                #         if tmp_labels[idx_in_batch] not in zi_dict["global"].keys():
+                #             zi_dict["global"][tmp_labels[idx_in_batch]] = []
+                #         zi_dict["global"][tmp_labels[idx_in_batch]].append(global_middle_preds[idx_in_batch])
 
                 loss = criterion(log_probs, labels)
                 loss.backward()
@@ -73,24 +73,24 @@ class MyModelTrainer(ClientTrainer):
                 # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
 
                 optimizer.step()
-                logging.info(
-                    "Update Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
-                        epoch,
-                        (batch_idx + 1) * args.batch_size,
-                        len(train_data) * args.batch_size,
-                        100.0 * (batch_idx + 1) / len(train_data),
-                        loss.item(),
-                    )
-                )
+                # logging.info(
+                #     "Update Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
+                #         epoch,
+                #         (batch_idx + 1) * args.batch_size,
+                #         len(train_data) * args.batch_size,
+                #         100.0 * (batch_idx + 1) / len(train_data),
+                #         loss.item(),
+                #     )
+                # )
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss) / len(batch_loss))
-            logging.info(
-                "Client Index = {}\tEpoch: {}\tLoss: {:.6f}".format(
-                    self.id, epoch, sum(epoch_loss) / len(epoch_loss)
-                )
-            )
-        if len(zi_dict["local"]) != 0 and len(zi_dict["global"]) != 0:
-            joblib.dump(zi_dict, f".tmp_z_{self.id}.pkl")
+            # logging.info(
+            #     "Client Index = {}\tEpoch: {}\tLoss: {:.6f}".format(
+            #         self.id, epoch, sum(epoch_loss) / len(epoch_loss)
+            #     )
+            # )
+        # if len(zi_dict["local"]) != 0 and len(zi_dict["global"]) != 0:
+        #     joblib.dump(zi_dict, f".tmp_z_{self.id}.pkl")
 
     def test(self, test_data, device, args):
         model = self.model
@@ -115,10 +115,10 @@ class MyModelTrainer(ClientTrainer):
                 x = x.to(device)
                 target = target.to(device)
                 pred_res = model(x)
-                if isinstance(pred_res, tuple) and len(pred_res) == 2:
-                    pred = pred_res[1]
-                else:
-                    pred = pred_res
+                # if isinstance(pred_res, tuple) and len(pred_res) == 2:
+                #     pred = pred_res[1]
+                # else:
+                pred = pred_res
                 loss = criterion(pred, target)
 
                 _, predicted = torch.max(pred, -1)
