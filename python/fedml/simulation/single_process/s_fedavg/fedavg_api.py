@@ -101,7 +101,7 @@ class S_FedAvgAPI(object):
         elif self.args.dataset in ["mnist", "cifar10"]:
             class_num = 10
         elif self.args.dataset in ["kag-nih"]:
-            class_num = 12
+            class_num = 15
         else:
             class_num = 0
             logging.info("not support")
@@ -282,15 +282,6 @@ class S_FedAvgAPI(object):
                     range(client_num_in_total), num_clients, replace=False
                 )
             else:
-                # sorted_indexes = np.argsort(phi, kind=random.choice([
-                #     'quicksort', 'mergesort', 'heapsort', 'stable'
-                # ])).tolist()
-                # client_indexes = []
-                # for client_idx in range(num_clients):
-                #     client_indexes.append(
-                #         sorted_indexes[client_idx * int(client_num_in_total/client_num_per_round)]
-                #     )
-                # client_indexes = np.array(client_indexes)
                 client_indexes = np.argsort(phi, kind=random.choice([
                     'quicksort', 'mergesort', 'heapsort', 'stable'
                 ]))[-num_clients:]
