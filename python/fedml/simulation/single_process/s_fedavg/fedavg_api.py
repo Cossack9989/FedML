@@ -102,6 +102,8 @@ class S_FedAvgAPI(object):
             class_num = 10
         elif self.args.dataset in ["kag-nih"]:
             class_num = 15
+        elif self.args.dataset in ["bimcv-covid"]:
+            class_num = 2
         else:
             class_num = 0
             logging.info("not support")
