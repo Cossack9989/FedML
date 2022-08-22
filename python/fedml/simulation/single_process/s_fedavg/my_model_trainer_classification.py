@@ -35,7 +35,7 @@ class MyModelTrainer(ClientTrainer):
                 amsgrad=True,
             )
 
-        epoch_loss = []
+        # epoch_loss = []
         for epoch in range(args.epochs):
             batch_loss = []
             for batch_idx, (x, labels) in enumerate(train_data):
@@ -64,7 +64,7 @@ class MyModelTrainer(ClientTrainer):
                 #     )
                 # )
                 batch_loss.append(loss.item())
-            epoch_loss.append(sum(batch_loss) / len(batch_loss))
+            # epoch_loss.append(sum(batch_loss) / len(batch_loss))
             # logging.info(
             #     "Client Index = {}\tEpoch: {}\tLoss: {:.6f}".format(
             #         self.id, epoch, sum(epoch_loss) / len(epoch_loss)

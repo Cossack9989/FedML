@@ -248,6 +248,7 @@ class S_FedAvgAPI(object):
             "test_total": 0
         }
         criterion = torch.nn.CrossEntropyLoss().to(device)
+        model.to(device)
         model.eval()
 
         with torch.no_grad():
