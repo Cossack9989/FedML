@@ -114,10 +114,10 @@ class MyModelTrainer(ClientTrainer):
                             "numerator": 0,
                             "denominator": 0,
                         }
-                    positive_idxs = np.where(target.numpy() == typ)[0]
-                    true_positive = np.sum(target.numpy()[positive_idxs] == predicted.numpy()[positive_idxs])
+                    positive_idxs = np.where(target.cpu().numpy() == typ)[0]
+                    true_positive = np.sum(target.cpu().numpy()[positive_idxs] == predicted.cpu().numpy()[positive_idxs])
                     all_actually_positive = len(positive_idxs)
-                    all_predicted_positive = len(np.where(predicted.numpy() == typ)[0])
+                    all_predicted_positive = len(np.where(predicted.cpu().numpy() == typ)[0])
                     metrics["_test_recall"][typ]["numerator"] += true_positive
                     metrics["_test_precision"][typ]["numerator"] += true_positive
                     metrics["_test_recall"][typ]["denominator"] += all_actually_positive
