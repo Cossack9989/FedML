@@ -269,6 +269,8 @@ class FedAvgAPI(object):
         logging.info(f"Test/Acc: {test_acc_list.tolist()}")
 
         return {
+                "Authority/Test/Acc": test_acc,
+                "Authority/Train/Acc": train_acc,
                 "Test/Acc": test_acc_list.tolist(),
                 "Train/Acc": train_acc_list.tolist(),
                 "Test/Recall": test_metrics['recall'],
