@@ -126,7 +126,37 @@ class FedAvgAPI(object):
                 else:
                     res_dict[round_idx] = self._local_test_on_all_clients(round_idx)
 
+            if round_idx not in res_dict.keys():
+                res_dict[round_idx] = {}
+            res_dict[round_idx]["Global/Acc"] = self._validate_global_model(
+                self.model_trainer.model, self.test_global, self.device)
+
         joblib.dump(res_dict, ".tmp_res2.pkl")
+
+    def _validate_global_model(self, model: torch.nn.Module, data, device):
+        metrics = {
+            "test_correct": 0,
+            "test_loss": 0,
+            "test_total": 0
+        }
+        criterion = torch.nn.CrossEntropyLoss().to(device)
+        model.to(device)
+        model.eval()
+        with torch.no_grad():
+            for batch_idx, (x, target) in enumerate(data):
+                x = x.to(device)
+                target = target.to(device)
+                pred = model(x)
+                loss = criterion(pred, target)
+
+                _, predicted = torch.max(pred, -1)
+                correct = predicted.eq(target).sum()
+
+                metrics["test_correct"] += correct.item()
+                metrics["test_loss"] += loss.item() * target.size(0)
+                metrics["test_total"] += target.size(0)
+
+        return metrics["test_correct"] / metrics["test_total"]
 
     def _client_sampling(self, round_idx, client_num_in_total, client_num_per_round):
         if client_num_in_total == client_num_per_round:
