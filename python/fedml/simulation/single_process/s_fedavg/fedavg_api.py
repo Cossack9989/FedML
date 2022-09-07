@@ -32,7 +32,8 @@ class S_FedAvgAPI(object):
             class_num,
             valid_data_in_aggregator,
             alpha,
-            beta
+            beta,
+            prob_ratio
         ] = dataset
         self.train_global = train_data_global
         self.test_global = test_data_global
@@ -49,6 +50,7 @@ class S_FedAvgAPI(object):
         self.train_data_local_num_dict = train_data_local_num_dict
         self.train_data_local_dict = train_data_local_dict
         self.test_data_local_dict = test_data_local_dict
+        self.prob_ratio = prob_ratio
 
         logging.info("model = {}".format(model))
         if args.dataset == "stackoverflow_lr":
@@ -146,7 +148,7 @@ class S_FedAvgAPI(object):
             Instead of changing the 'Client' instances, our implementation keeps the 'Client' instances and then updates their local dataset 
             """
             client_indexes = self._client_sampling(
-                round_idx, self.args.client_num_in_total, self.args.client_num_per_round, phi
+                round_idx, self.args.client_num_in_total, self.args.client_num_per_round, phi, self.prob_ratio
             )
             logging.info("client_indexes = " + str(client_indexes))
 
@@ -282,7 +284,7 @@ class S_FedAvgAPI(object):
             num_clients = min(client_num_per_round, client_num_in_total)
 
             if len(set(phi)) == 1:
-                np.random.seed(round_idx)
+                np.random.seed((round_idx + 1) * self.seed)
                 client_indexes = np.random.choice(
                     range(client_num_in_total), num_clients, replace=False
                 ).tolist()
@@ -298,6 +300,8 @@ class S_FedAvgAPI(object):
                     lucky_dogs = sorted_indexes[:-num_clients].tolist() + [lucky_cat]
                     avg_prob = [(1 - ratio) / (len(lucky_dogs) - 1)] * (len(lucky_dogs) - 1) + [ratio]
                     lucky_dog = np.random.choice(lucky_dogs, replace=False, p=avg_prob)
+                    if lucky_dog != lucky_cat:
+                        logging.info(f"Lucky dog: {lucky_dog}")
                     client_indexes = [lucky_dog] + partial_client_indexes
 
         logging.info("client_indexes = %s" % str(client_indexes))
