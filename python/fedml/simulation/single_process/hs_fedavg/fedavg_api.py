@@ -1,7 +1,6 @@
 import copy
 import random
 import joblib
-import secrets
 import numpy as np
 import torch
 import wandb
@@ -14,9 +13,10 @@ from .client import Client
 from .my_model_trainer_classification import MyModelTrainer as MyModelTrainerCLS
 from .my_model_trainer_nwp import MyModelTrainer as MyModelTrainerNWP
 from .my_model_trainer_tag_prediction import MyModelTrainer as MyModelTrainerTAG
+from .hs_fft import process as fft
 
 
-class S_FedAvgAPI(object):
+class HS_FedAvgAPI(object):
 
     def __init__(self, args, device, dataset, model):
         self.device = device
@@ -67,7 +67,6 @@ class S_FedAvgAPI(object):
             test_data_local_dict,
             self.model_trainer,
         )
-        self.seed = secrets.SystemRandom().randint(0x0, 0xffffffff)
 
     def _setup_clients(
         self,
@@ -133,6 +132,7 @@ class S_FedAvgAPI(object):
         client_dict = {}
         phi = [1 / K] * K
         sv = [(1 - alpha) / (K * beta)] * K
+        amp_summary = torch.zeros((3, 512, 512))
 
         for round_idx in range(self.args.comm_round):
 
@@ -140,6 +140,7 @@ class S_FedAvgAPI(object):
 
             w_locals = []
             client_dict[round_idx] = {}
+            amp_locals = []
 
             """
             for scalability: following the original FedAvg algorithm, we uniformly sample a fraction of clients in each round.
@@ -162,9 +163,16 @@ class S_FedAvgAPI(object):
                 )
 
                 # train on new dataset
-                w = client.train(copy.deepcopy(w_global))
+                amp, w = client.train(copy.deepcopy(w_global), amp_summary)
                 # self.logging.info("local weights = " + str(w))
                 w_locals.append((client.get_sample_number(), copy.deepcopy(w)))
+                amp_locals.append(amp)
+
+            # TODO: aggregate amp
+            tmp_amp = torch.zeros((3, 512, 512))
+            for amp in amp_locals:
+                tmp_amp += amp
+            amp_summary = tmp_amp / len(amp_locals)
 
             for idx, client in enumerate(self.client_list):
 
@@ -273,7 +281,7 @@ class S_FedAvgAPI(object):
 
         return metrics
 
-    def _client_sampling(self, round_idx, client_num_in_total, client_num_per_round, phi, ratio=None):
+    def _client_sampling(self, round_idx, client_num_in_total, client_num_per_round, phi):
         if client_num_in_total == client_num_per_round:
             client_indexes = [
                 client_index for client_index in range(client_num_in_total)
@@ -285,21 +293,11 @@ class S_FedAvgAPI(object):
                 np.random.seed(round_idx)
                 client_indexes = np.random.choice(
                     range(client_num_in_total), num_clients, replace=False
-                ).tolist()
+                )
             else:
-                sorted_indexes = np.argsort(phi, kind=random.choice([
+                client_indexes = np.argsort(phi, kind=random.choice([
                     'quicksort', 'mergesort', 'heapsort', 'stable'
-                ])).tolist()
-                client_indexes = sorted_indexes[-num_clients:]
-                if isinstance(ratio, float) and 0 < ratio < 1:
-                    partial_client_indexes = client_indexes[1:]
-                    random.seed(self.seed)
-                    lucky_cat = client_indexes[0]
-                    lucky_dogs = sorted_indexes[:-num_clients].tolist() + [lucky_cat]
-                    avg_prob = [(1 - ratio) / (len(lucky_dogs) - 1)] * (len(lucky_dogs) - 1) + [ratio]
-                    lucky_dog = np.random.choice(lucky_dogs, replace=False, p=avg_prob)
-                    client_indexes = [lucky_dog] + partial_client_indexes
-
+                ]))[-num_clients:]
         logging.info("client_indexes = %s" % str(client_indexes))
         return client_indexes
 
