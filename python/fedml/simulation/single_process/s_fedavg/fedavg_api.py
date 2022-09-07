@@ -297,7 +297,7 @@ class S_FedAvgAPI(object):
                     partial_client_indexes = client_indexes[1:]
                     random.seed(self.seed)
                     lucky_cat = client_indexes[0]
-                    lucky_dogs = sorted_indexes[:-num_clients].tolist() + [lucky_cat]
+                    lucky_dogs = sorted_indexes[:-num_clients] + [lucky_cat]
                     avg_prob = [(1 - ratio) / (len(lucky_dogs) - 1)] * (len(lucky_dogs) - 1) + [ratio]
                     lucky_dog = np.random.choice(lucky_dogs, replace=False, p=avg_prob)
                     if lucky_dog != lucky_cat:
