@@ -1,4 +1,5 @@
 import copy
+import time
 import random
 import joblib
 import secrets
@@ -9,7 +10,7 @@ import logging
 
 from itertools import combinations
 from collections import Counter
-from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import f1_score
 from .client import Client
 from .my_model_trainer_classification import MyModelTrainer as MyModelTrainerCLS
 from .my_model_trainer_nwp import MyModelTrainer as MyModelTrainerNWP
@@ -33,7 +34,9 @@ class S_FedAvgAPI(object):
             valid_data_in_aggregator,
             alpha,
             beta,
-            prob_ratio
+            prob_ratio,
+            sv_approaching,
+            f1_switch
         ] = dataset
         self.train_global = train_data_global
         self.test_global = test_data_global
@@ -45,12 +48,13 @@ class S_FedAvgAPI(object):
             "alpha": alpha,
             "beta": beta
         }
-
+        self.sv_approaching = sv_approaching
         self.client_list = []
         self.train_data_local_num_dict = train_data_local_num_dict
         self.train_data_local_dict = train_data_local_dict
         self.test_data_local_dict = test_data_local_dict
         self.prob_ratio = prob_ratio
+        self.f1 = f1_switch
 
         logging.info("model = {}".format(model))
         if args.dataset == "stackoverflow_lr":
@@ -168,60 +172,87 @@ class S_FedAvgAPI(object):
                 # self.logging.info("local weights = " + str(w))
                 w_locals.append((client.get_sample_number(), copy.deepcopy(w)))
 
-            for idx, client in enumerate(self.client_list):
-
-                # calculate shapley
-                # logging.info(f"calculating shapley of client {idx}")
-                tmp_w_locals = copy.deepcopy(w_locals)
-                tmp_client_idx_list = list(range(len(self.client_list)))
-                del tmp_client_idx_list[idx]
-
-                ap = 0
-                cnt = 0
-                total_combs = []
-                for left_client_num in range(1, len(self.client_list)):
-                    combs = list(combinations(tmp_client_idx_list, left_client_num))
-                    cnt += len(combs)
-                    total_combs += list(combinations(tmp_client_idx_list, left_client_num))
-
-                    for client_set in combs:
-                        client_set = list(client_set)
-                        tmp_w_part = np.array(tmp_w_locals)[np.array(client_set)].tolist()
-                        tmp_w_part = [tuple(elem) for elem in tmp_w_part]
-                        tmp_w_full = tmp_w_part + [tmp_w_locals[idx]]
-
+            if self.sv_approaching:
+                sv_guess = [0.0] * self.args.client_num_per_round
+                approaching_cnt = 0
+                sv_distance = np.inf
+                client_indexs = list(range(self.args.client_num_per_round))
+                while approaching_cnt < 10 or sv_distance < 1:
+                    np.random.seed(self.seed * int(time.time()))
+                    np.random.shuffle(client_indexs)
+                    cnt = 0
+                    used_value = 0
+                    for tmp_permutation_idx in range(self.args.client_num_per_round):
+                        tmp_w_locals = w_locals[:tmp_permutation_idx]
                         tmp_model_trainer = copy.deepcopy(self.model_trainer)
-                        tmp_w_fake_global_full = self._aggregate(tmp_w_full)
-                        tmp_model_trainer.set_model_params(tmp_w_fake_global_full)
-                        tmp_m_full = self._valid_test_on_aggregator(
+                        tmp_w_global = self._aggregate(tmp_w_locals)
+                        tmp_model_trainer.set_model_params(tmp_w_global)
+                        tmp_m = self._valid_test_on_aggregator(
                             tmp_model_trainer.model, self.global_valid_data, self.device)
+                        ap = (tmp_m["test_correct"] / tmp_m["test_total"]) - used_value
+                        sv_guess[tmp_permutation_idx] = (cnt * sv_guess[tmp_permutation_idx] + ap) / (cnt + 1)
+                        used_value = (tmp_m["test_correct"] / tmp_m["test_total"])
+                        cnt += 1
+                        # TODO
 
-                        tmp_model_trainer = copy.deepcopy(self.model_trainer)
-                        tmp_w_fake_global_part = self._aggregate(tmp_w_part)
-                        tmp_model_trainer.set_model_params(tmp_w_fake_global_part)
-                        tmp_m_part = self._valid_test_on_aggregator(
-                            tmp_model_trainer.model, self.global_valid_data, self.device)
+            else:
 
-                        ap += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part["test_total"]
+                for idx, client in enumerate(self.client_list):
+                    # calculate shapley
+                    # logging.info(f"calculating shapley of client {idx}")
+                    tmp_w_locals = copy.deepcopy(w_locals)
+                    tmp_client_idx_list = list(range(len(self.client_list)))
+                    del tmp_client_idx_list[idx]
 
-                assert cnt != 0
-                client_idx = client_indexes[idx]
-                # sv[client_idx] += (ap / cnt)
+                    ap = 0
+                    cnt = 0
+                    total_combs = []
+                    for left_client_num in range(1, len(self.client_list)):
+                        combs = list(combinations(tmp_client_idx_list, left_client_num))
+                        cnt += len(combs)
+                        total_combs += list(combinations(tmp_client_idx_list, left_client_num))
 
-                tmp_w_single = self._aggregate(copy.deepcopy([tmp_w_locals[idx]]))
-                tmp_model_trainer = copy.deepcopy(self.model_trainer)
-                tmp_model_trainer.set_model_params(tmp_w_single)
-                tmp_m_single = self._valid_test_on_aggregator(
-                    tmp_model_trainer.model, self.global_valid_data, self.device
-                )
-                tmp_client_accuracy = tmp_m_single["test_correct"] / tmp_m_single["test_total"]
-                client_dict[round_idx][client_idx] = tmp_client_accuracy
-                ap += tmp_client_accuracy
-                cnt += 1
-                # sv[client_idx] = (ap / cnt)
-                sv[client_idx] += (ap / cnt)
-                phi[client_idx] = alpha * phi[client_idx] + beta * sv[client_idx]
-                logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
+                        for client_set in combs:
+                            client_set = list(client_set)
+                            tmp_w_part = np.array(tmp_w_locals)[np.array(client_set)].tolist()
+                            tmp_w_part = [tuple(elem) for elem in tmp_w_part]
+                            tmp_w_full = tmp_w_part + [tmp_w_locals[idx]]
+
+                            tmp_model_trainer = copy.deepcopy(self.model_trainer)
+                            tmp_w_fake_global_full = self._aggregate(tmp_w_full)
+                            tmp_model_trainer.set_model_params(tmp_w_fake_global_full)
+                            tmp_m_full = self._valid_test_on_aggregator(
+                                tmp_model_trainer.model, self.global_valid_data, self.device)
+
+                            tmp_model_trainer = copy.deepcopy(self.model_trainer)
+                            tmp_w_fake_global_part = self._aggregate(tmp_w_part)
+                            tmp_model_trainer.set_model_params(tmp_w_fake_global_part)
+                            tmp_m_part = self._valid_test_on_aggregator(
+                                tmp_model_trainer.model, self.global_valid_data, self.device)
+
+                            if not self.f1:
+                                ap += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part["test_total"]
+                            else:
+                                ap += tmp_m_full["F1"] - tmp_m_part["F1"]
+
+                    assert cnt != 0
+                    client_idx = client_indexes[idx]
+                    # sv[client_idx] += (ap / cnt)
+
+                    tmp_w_single = self._aggregate(copy.deepcopy([tmp_w_locals[idx]]))
+                    tmp_model_trainer = copy.deepcopy(self.model_trainer)
+                    tmp_model_trainer.set_model_params(tmp_w_single)
+                    tmp_m_single = self._valid_test_on_aggregator(
+                        tmp_model_trainer.model, self.global_valid_data, self.device
+                    )
+                    tmp_client_accuracy = tmp_m_single["test_correct"] / tmp_m_single["test_total"]
+                    client_dict[round_idx][client_idx] = tmp_client_accuracy
+                    ap += tmp_client_accuracy
+                    cnt += 1
+                    # sv[client_idx] = (ap / cnt)
+                    sv[client_idx] += (ap / cnt)
+                    phi[client_idx] = alpha * phi[client_idx] + beta * sv[client_idx]
+                    logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
 
             # update global weights
             w_global = self._aggregate(w_locals)
@@ -238,12 +269,42 @@ class S_FedAvgAPI(object):
                 else:
                     res_dict[round_idx] = self._local_test_on_all_clients(round_idx)
 
+            if round_idx not in res_dict.keys():
+                res_dict[round_idx] = {}
+            res_dict[round_idx]["Global/Acc"] = self._validate_global_model(
+                self.model_trainer.model, self.test_global, self.device)
+
             phi_dict[round_idx] = copy.deepcopy(phi)
             sv_dict[round_idx] = copy.deepcopy(sv)
         joblib.dump(phi_dict, ".tmp_phi.pkl")
         joblib.dump(res_dict, ".tmp_res.pkl")
         joblib.dump(sv_dict, ".tmp_sv.pkl")
         joblib.dump(client_dict, ".tmp_client.pkl")
+
+    def _validate_global_model(self, model: torch.nn.Module, data, device):
+        metrics = {
+            "test_correct": 0,
+            "test_loss": 0,
+            "test_total": 0
+        }
+        criterion = torch.nn.CrossEntropyLoss().to(device)
+        model.to(device)
+        model.eval()
+        with torch.no_grad():
+            for batch_idx, (x, target) in enumerate(data):
+                x = x.to(device)
+                target = target.to(device)
+                pred = model(x)
+                loss = criterion(pred, target)
+
+                _, predicted = torch.max(pred, -1)
+                correct = predicted.eq(target).sum()
+
+                metrics["test_correct"] += correct.item()
+                metrics["test_loss"] += loss.item() * target.size(0)
+                metrics["test_total"] += target.size(0)
+
+        return metrics["test_correct"] / metrics["test_total"]
 
     def _valid_test_on_aggregator(self, model: torch.nn.Module, data, device):
         metrics = {
@@ -254,11 +315,14 @@ class S_FedAvgAPI(object):
         criterion = torch.nn.CrossEntropyLoss().to(device)
         model.to(device)
         model.eval()
+        y_true = []
+        y_pred = []
 
         with torch.no_grad():
             for batch_idx, (x, target) in enumerate(data):
                 x = x.to(device)
                 target = target.to(device)
+                y_true += target.tolist()
                 pred_res = model(x)
                 # if isinstance(pred_res, tuple) and len(pred_res) == 2:
                 #     pred = pred_res[1]
@@ -267,11 +331,14 @@ class S_FedAvgAPI(object):
                 loss = criterion(pred, target)
 
                 _, predicted = torch.max(pred, -1)
+                y_pred += predicted.tolist()
                 correct = predicted.eq(target).sum()
 
                 metrics["test_correct"] += correct.item()
                 metrics["test_loss"] += loss.item() * target.size(0)
                 metrics["test_total"] += target.size(0)
+
+        metrics["F1"] = f1_score(y_true, y_pred)
 
         return metrics
 
