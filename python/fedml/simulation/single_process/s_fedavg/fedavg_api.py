@@ -36,7 +36,8 @@ class S_FedAvgAPI(object):
             beta,
             prob_ratio,
             sv_approaching,
-            f1_switch
+            f1_switch,
+            target_label
         ] = dataset
         self.train_global = train_data_global
         self.test_global = test_data_global
@@ -55,6 +56,7 @@ class S_FedAvgAPI(object):
         self.test_data_local_dict = test_data_local_dict
         self.prob_ratio = prob_ratio
         self.f1 = f1_switch
+        self.target_label = target_label
 
         logging.info("model = {}".format(model))
         if args.dataset == "stackoverflow_lr":
@@ -230,10 +232,11 @@ class S_FedAvgAPI(object):
                             tmp_m_part = self._valid_test_on_aggregator(
                                 tmp_model_trainer.model, self.global_valid_data, self.device)
 
-                            if not self.f1:
-                                ap += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part["test_total"]
-                            else:
+                            if self.f1 and isinstance(self.target_label, int):
                                 ap += tmp_m_full["F1"] - tmp_m_part["F1"]
+                            else:
+                                ap += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part[
+                                    "test_total"]
 
                     assert cnt != 0
                     client_idx = client_indexes[idx]
@@ -338,7 +341,8 @@ class S_FedAvgAPI(object):
                 metrics["test_loss"] += loss.item() * target.size(0)
                 metrics["test_total"] += target.size(0)
 
-        metrics["F1"] = f1_score(y_true, y_pred)
+        if isinstance(self.target_label, int):
+            metrics["F1"] = f1_score(y_true, y_pred, average=None, labels=[self.target_label])[0]
 
         return metrics
 
