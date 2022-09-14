@@ -10,7 +10,7 @@ import logging
 
 from itertools import combinations
 from collections import Counter
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, recall_score, precision_score
 from .client import Client
 from .my_model_trainer_classification import MyModelTrainer as MyModelTrainerCLS
 from .my_model_trainer_nwp import MyModelTrainer as MyModelTrainerNWP
@@ -36,7 +36,7 @@ class S_FedAvgAPI(object):
             beta,
             prob_ratio,
             sv_approaching,
-            f1_switch,
+            score_method,
             target_label
         ] = dataset
         self.train_global = train_data_global
@@ -55,7 +55,7 @@ class S_FedAvgAPI(object):
         self.train_data_local_dict = train_data_local_dict
         self.test_data_local_dict = test_data_local_dict
         self.prob_ratio = prob_ratio
-        self.f1 = f1_switch
+        self.score = score_method
         self.target_label = target_label
 
         logging.info("model = {}".format(model))
@@ -231,12 +231,17 @@ class S_FedAvgAPI(object):
                             tmp_model_trainer.set_model_params(tmp_w_fake_global_part)
                             tmp_m_part = self._valid_test_on_aggregator(
                                 tmp_model_trainer.model, self.global_valid_data, self.device)
-
-                            if self.f1 and isinstance(self.target_label, int):
-                                ap += tmp_m_full["F1"] - tmp_m_part["F1"]
+                            if isinstance(self.target_label, int):
+                                if self.score == "F1":
+                                    ap += tmp_m_full["F1"] - tmp_m_part["F1"]
+                                elif self.score in ["Sensitivity", "Recall", "TPR", "tpr"]:
+                                    ap += tmp_m_full["Recall"] - tmp_m_part["Recall"]
+                                elif self.score in ["Precision", "PPV", "ppv"]:
+                                    ap += tmp_m_full["Precision"] - tmp_m_part["Precision"]
+                                else:
+                                    ap += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part["test_total"]
                             else:
-                                ap += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part[
-                                    "test_total"]
+                                ap += (tmp_m_full["test_correct"] - tmp_m_part["test_correct"]) / tmp_m_part["test_total"]
 
                     assert cnt != 0
                     client_idx = client_indexes[idx]
@@ -343,6 +348,8 @@ class S_FedAvgAPI(object):
 
         if isinstance(self.target_label, int):
             metrics["F1"] = f1_score(y_true, y_pred, average=None, labels=[self.target_label])[0]
+            metrics["Recall"] = recall_score(y_true, y_pred, average=None, labels=[self.target_label])[0]
+            metrics["Precision"] = precision_score(y_true, y_pred, average=None, labels=[self.target_label])[0]
 
         return metrics
 
