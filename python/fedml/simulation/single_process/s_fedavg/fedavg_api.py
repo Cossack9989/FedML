@@ -380,14 +380,15 @@ class S_FedAvgAPI(object):
                 ])).tolist()
                 client_indexes = sorted_indexes[-num_clients:]
                 if isinstance(ratio, float) and 0 < ratio < 1:
-                    partial_client_indexes = client_indexes[1:]
+                    partial_client_indexes = copy.deepcopy(client_indexes)
                     random.seed(self.seed)
-                    lucky_cat = client_indexes[0]
+                    lucky_cat = random.choice(partial_client_indexes)
+                    # lucky_cat = client_indexes[0]
+                    partial_client_indexes.remove(lucky_cat)
                     lucky_dogs = sorted_indexes[:-num_clients] + [lucky_cat]
                     avg_prob = [(1 - ratio) / (len(lucky_dogs) - 1)] * (len(lucky_dogs) - 1) + [ratio]
                     lucky_dog = np.random.choice(lucky_dogs, replace=False, p=avg_prob)
-                    if lucky_dog != lucky_cat:
-                        logging.info(f"Lucky dog: {lucky_dog}")
+                    logging.info(f"Lucky dog: {lucky_dog}, Lucky cat: {lucky_cat}")
                     client_indexes = [lucky_dog] + partial_client_indexes
 
         logging.info("client_indexes = %s" % str(client_indexes))
