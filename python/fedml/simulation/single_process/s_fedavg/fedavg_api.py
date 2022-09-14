@@ -279,7 +279,7 @@ class S_FedAvgAPI(object):
 
             if round_idx not in res_dict.keys():
                 res_dict[round_idx] = {}
-            res_dict[round_idx]["Global/Acc"] = self._validate_global_model(
+            res_dict[round_idx]["Global/Acc"], res_dict[round_idx]["Global/Recall"] = self._validate_global_model(
                 self.model_trainer.model, self.test_global, self.device)
 
             phi_dict[round_idx] = copy.deepcopy(phi)
@@ -298,21 +298,29 @@ class S_FedAvgAPI(object):
         criterion = torch.nn.CrossEntropyLoss().to(device)
         model.to(device)
         model.eval()
+        y_true = []
+        y_pred = []
+
         with torch.no_grad():
             for batch_idx, (x, target) in enumerate(data):
                 x = x.to(device)
                 target = target.to(device)
+                y_true += target.tolist()
                 pred = model(x)
                 loss = criterion(pred, target)
 
                 _, predicted = torch.max(pred, -1)
+                y_pred += predicted.tolist()
                 correct = predicted.eq(target).sum()
 
                 metrics["test_correct"] += correct.item()
                 metrics["test_loss"] += loss.item() * target.size(0)
                 metrics["test_total"] += target.size(0)
 
-        return metrics["test_correct"] / metrics["test_total"]
+            global_acc = metrics["test_correct"] / metrics["test_total"]
+            global_recall = recall_score(y_true, y_pred, average=None, labels=[self.target_label])[0]
+
+        return global_acc, global_recall
 
     def _valid_test_on_aggregator(self, model: torch.nn.Module, data, device):
         metrics = {
