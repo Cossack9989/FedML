@@ -198,7 +198,7 @@ class S_FedAvgAPI(object):
                     np.random.shuffle(client_indexs)
                     used_value = 0
                     if approaching_cnt != 0:
-                        sv_last_round = sv_current
+                        sv_last_round = copy.deepcopy(sv_current)
                     for tmp_permutation_idx in range(1, self.args.client_num_per_round):
                         tmp_w_locals = w_locals[:tmp_permutation_idx]
                         tmp_model_trainer = copy.deepcopy(self.model_trainer)
@@ -370,7 +370,10 @@ class S_FedAvgAPI(object):
                 metrics["test_total"] += target.size(0)
 
             global_acc = metrics["test_correct"] / metrics["test_total"]
-            global_recall = recall_score(y_true, y_pred, average=None, labels=[self.target_label])[0]
+            if self.target_label is None:
+                global_recall = None
+            else:
+                global_recall = recall_score(y_true, y_pred, average=None, labels=[self.target_label])[0]
 
         return global_acc, global_recall
 
