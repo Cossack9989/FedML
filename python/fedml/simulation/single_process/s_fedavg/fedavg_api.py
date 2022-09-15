@@ -224,8 +224,9 @@ class S_FedAvgAPI(object):
                         sv_current[tmp_permutation_idx] = \
                             (approaching_cnt * sv_current[tmp_permutation_idx] + ap) / (approaching_cnt + 1)
 
+                    if approaching_cnt != 0:
+                        d.append(distance.euclidean(sv_last_round, sv_current))
                     approaching_cnt += 1
-                    d.append(distance.euclidean(sv_last_round, sv_current))
 
                 sv_approached = copy.deepcopy(sv_current)
                 logging.info(f"Approaching: {sv_approached}")
