@@ -9,6 +9,7 @@ import wandb
 import logging
 
 from itertools import combinations
+from scipy.spatial import distance
 from collections import Counter
 from sklearn.metrics import f1_score, recall_score, precision_score
 from .client import Client
@@ -127,6 +128,16 @@ class S_FedAvgAPI(object):
         # class_weight = compute_class_weight(class_weight='balanced', classes=classes, y=y)
         return torch.tensor(np.array(class_weight), dtype=torch.float)
 
+    def isApproached(self, d_list, approaching_limit=0.01):
+        if len(d_list) <= 3:
+            return True
+        for d in d_list[-3:]:
+            if d >= approaching_limit:
+                return True
+        if len(d_list) > self.args.client_num_per_round ** 2:
+            return False
+        return True
+
     def train(self):
 
         logging.info("self.model_trainer = {}".format(self.model_trainer))
@@ -175,14 +186,17 @@ class S_FedAvgAPI(object):
                 w_locals.append((client.get_sample_number(), copy.deepcopy(w)))
 
             if self.sv_approaching:
-                sv_guess = [0.0] * self.args.client_num_per_round
+                t_head = time.time()
+                sv_current = [0.0] * self.args.client_num_per_round
+                sv_approached = [0.0] * self.args.client_num_per_round
+                sv_last_round = [np.inf] * self.args.client_num_per_round
+                d = []
                 approaching_cnt = 0
                 sv_distance = np.inf
                 client_indexs = list(range(self.args.client_num_per_round))
-                while approaching_cnt < 10 or sv_distance < 1:
+                while self.isApproached(d_list=d):
                     np.random.seed(self.seed * int(time.time()))
                     np.random.shuffle(client_indexs)
-                    cnt = 0
                     used_value = 0
                     for tmp_permutation_idx in range(self.args.client_num_per_round):
                         tmp_w_locals = w_locals[:tmp_permutation_idx]
@@ -191,14 +205,47 @@ class S_FedAvgAPI(object):
                         tmp_model_trainer.set_model_params(tmp_w_global)
                         tmp_m = self._valid_test_on_aggregator(
                             tmp_model_trainer.model, self.global_valid_data, self.device)
-                        ap = (tmp_m["test_correct"] / tmp_m["test_total"]) - used_value
-                        sv_guess[tmp_permutation_idx] = (cnt * sv_guess[tmp_permutation_idx] + ap) / (cnt + 1)
-                        used_value = (tmp_m["test_correct"] / tmp_m["test_total"])
-                        cnt += 1
-                        # TODO
+                        if isinstance(self.target_label, int):
+                            if self.score == "F1":
+                                ap = tmp_m["F1"] - used_value
+                                used_value = tmp_m["F1"]
+                            elif self.score in ["Sensitivity", "Recall", "TPR", "tpr"]:
+                                ap = tmp_m["Recall"] - used_value
+                                used_value = tmp_m["Recall"]
+                            elif self.score in ["Precision", "PPV", "ppv"]:
+                                ap = tmp_m["Precision"] - used_value
+                                used_value = tmp_m["Precision"]
+                            else:
+                                ap = (tmp_m["test_correct"] / tmp_m["test_total"]) - used_value
+                                used_value = (tmp_m["test_correct"] / tmp_m["test_total"])
+                        else:
+                            ap = (tmp_m["test_correct"] / tmp_m["test_total"]) - used_value
+                            used_value = (tmp_m["test_correct"] / tmp_m["test_total"])
+                        sv_current[tmp_permutation_idx] = \
+                            (approaching_cnt * sv_current[tmp_permutation_idx] + ap) / (approaching_cnt + 1)
+
+                    approaching_cnt += 1
+                    d.append(distance.euclidean(sv_last_round, sv_current))
+
+                sv_approached = copy.deepcopy(sv_current)
+                logging.info(f"Approaching: {sv_approached}")
+                t_tail = time.time()
+                logging.info(f"[cost {t_tail - t_head}]")
+                for idx in range(self.args.client_num_per_round):
+                    client_idx = client_indexes[idx]
+                    tmp_w_single = self._aggregate(copy.deepcopy([w_locals[idx]]))
+                    tmp_model_trainer = copy.deepcopy(self.model_trainer)
+                    tmp_model_trainer.set_model_params(tmp_w_single)
+                    tmp_m_single = self._valid_test_on_aggregator(
+                        tmp_model_trainer.model, self.global_valid_data, self.device
+                    )
+                    client_dict[round_idx][client_idx] = tmp_m_single["test_correct"] / tmp_m_single["test_total"]
+                    sv[client_idx] = sv_approached[idx]
+                    phi[client_idx] = alpha * phi[client_idx] + beta * sv[client_idx]
+                    logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
 
             else:
-
+                t_head = time.time()
                 for idx, client in enumerate(self.client_list):
                     # calculate shapley
                     # logging.info(f"calculating shapley of client {idx}")
@@ -257,10 +304,13 @@ class S_FedAvgAPI(object):
                     client_dict[round_idx][client_idx] = tmp_client_accuracy
                     ap += tmp_client_accuracy
                     cnt += 1
-                    # sv[client_idx] = (ap / cnt)
-                    sv[client_idx] += (ap / cnt)
+                    sv[client_idx] = (ap / cnt)
+                    # sv[client_idx] += (ap / cnt)
                     phi[client_idx] = alpha * phi[client_idx] + beta * sv[client_idx]
                     logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
+
+                t_tail = time.time()
+                logging.info(f"[cost {t_tail - t_head}]")
 
             # update global weights
             w_global = self._aggregate(w_locals)
