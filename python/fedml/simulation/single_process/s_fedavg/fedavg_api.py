@@ -198,7 +198,7 @@ class S_FedAvgAPI(object):
                 while self.isApproached(d_list=d):
                     np.random.shuffle(client_indexs)
                     used_value = 0
-                    for tmp_permutation_idx in range(self.args.client_num_per_round):
+                    for tmp_permutation_idx in range(1, self.args.client_num_per_round):
                         tmp_w_locals = w_locals[:tmp_permutation_idx]
                         tmp_model_trainer = copy.deepcopy(self.model_trainer)
                         tmp_w_global = self._aggregate(tmp_w_locals)
