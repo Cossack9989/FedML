@@ -194,8 +194,8 @@ class S_FedAvgAPI(object):
                 approaching_cnt = 0
                 sv_distance = np.inf
                 client_indexs = list(range(self.args.client_num_per_round))
+                np.random.seed((self.seed * int(time.time())) & 0xffffffff)
                 while self.isApproached(d_list=d):
-                    np.random.seed(self.seed * int(time.time()))
                     np.random.shuffle(client_indexs)
                     used_value = 0
                     for tmp_permutation_idx in range(self.args.client_num_per_round):
