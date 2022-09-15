@@ -189,15 +189,16 @@ class S_FedAvgAPI(object):
                 t_head = time.time()
                 sv_current = [0.0] * self.args.client_num_per_round
                 sv_approached = [0.0] * self.args.client_num_per_round
-                sv_last_round = [np.inf] * self.args.client_num_per_round
+                sv_last_round = [0.0] * self.args.client_num_per_round
                 d = []
                 approaching_cnt = 0
-                sv_distance = np.inf
                 client_indexs = list(range(self.args.client_num_per_round))
                 np.random.seed((self.seed * int(time.time())) & 0xffffffff)
                 while self.isApproached(d_list=d):
                     np.random.shuffle(client_indexs)
                     used_value = 0
+                    if approaching_cnt != 0:
+                        sv_last_round = sv_current
                     for tmp_permutation_idx in range(1, self.args.client_num_per_round):
                         tmp_w_locals = w_locals[:tmp_permutation_idx]
                         tmp_model_trainer = copy.deepcopy(self.model_trainer)
