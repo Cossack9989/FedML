@@ -128,15 +128,15 @@ class S_FedAvgAPI(object):
         # class_weight = compute_class_weight(class_weight='balanced', classes=classes, y=y)
         return torch.tensor(np.array(class_weight), dtype=torch.float)
 
-    def isApproached(self, d_list, approaching_limit=0.01):
-        if len(d_list) <= 3:
+    def isApproached(self, d_list, approaching_limit=0.005):
+        if len(d_list) >= self.args.client_num_per_round ** 2:
+            return False
+        if len(d_list) <= self.args.client_num_per_round:
             return True
         for d in d_list[-3:]:
             if d >= approaching_limit:
                 return True
-        if len(d_list) > self.args.client_num_per_round ** 2:
-            return False
-        return True
+        return False
 
     def train(self):
 
