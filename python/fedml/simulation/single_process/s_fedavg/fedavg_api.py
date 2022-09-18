@@ -35,7 +35,7 @@ class S_FedAvgAPI(object):
             valid_data_in_aggregator,
             alpha,
             beta,
-            prob_ratio,
+            sampling_filter,
             sv_approaching,
             score_method,
             target_label
@@ -55,7 +55,7 @@ class S_FedAvgAPI(object):
         self.train_data_local_num_dict = train_data_local_num_dict
         self.train_data_local_dict = train_data_local_dict
         self.test_data_local_dict = test_data_local_dict
-        self.prob_ratio = prob_ratio
+        self.sampling_filter = sampling_filter
         self.score = score_method
         self.target_label = target_label
 
@@ -165,7 +165,7 @@ class S_FedAvgAPI(object):
             Instead of changing the 'Client' instances, our implementation keeps the 'Client' instances and then updates their local dataset 
             """
             client_indexes = self._client_sampling(
-                round_idx, self.args.client_num_in_total, self.args.client_num_per_round, phi, self.prob_ratio
+                round_idx, self.args.client_num_in_total, self.args.client_num_per_round, phi, self.sampling_filter
             )
             logging.info("client_indexes = " + str(client_indexes))
 
@@ -416,35 +416,46 @@ class S_FedAvgAPI(object):
 
         return metrics
 
-    def _client_sampling(self, round_idx, client_num_in_total, client_num_per_round, phi, ratio=None):
+    def _client_sampling(self, round_idx, client_num_in_total, client_num_per_round, phi, sampling_filter=None):
         if client_num_in_total == client_num_per_round:
             client_indexes = [
                 client_index for client_index in range(client_num_in_total)
             ]
         else:
             num_clients = min(client_num_per_round, client_num_in_total)
+            P = []
+            for idx in range(self.args.client_num_in_total):
+                if sampling_filter == "exp":
+                    P.append(np.exp(phi))
+                else:
+                    P.append(1)
+            _P = np.array(P) / np.sum(P)
+            client_indexes = np.random.choice(
+                range(client_num_in_total),
+                size=num_clients, replace=False, p=_P
+            )
 
-            if len(set(phi)) == 1:
-                np.random.seed((round_idx + 1) * self.seed)
-                client_indexes = np.random.choice(
-                    range(client_num_in_total), num_clients, replace=False
-                ).tolist()
-            else:
-                sorted_indexes = np.argsort(phi, kind=random.choice([
-                    'quicksort', 'mergesort', 'heapsort', 'stable'
-                ])).tolist()
-                client_indexes = sorted_indexes[-num_clients:]
-                if isinstance(ratio, float) and 0 < ratio < 1:
-                    partial_client_indexes = copy.deepcopy(client_indexes)
-                    random.seed(self.seed)
-                    lucky_cat = random.choice(partial_client_indexes)
-                    # lucky_cat = client_indexes[0]
-                    partial_client_indexes.remove(lucky_cat)
-                    lucky_dogs = sorted_indexes[:-num_clients] + [lucky_cat]
-                    avg_prob = [(1 - ratio) / (len(lucky_dogs) - 1)] * (len(lucky_dogs) - 1) + [ratio]
-                    lucky_dog = np.random.choice(lucky_dogs, replace=False, p=avg_prob)
-                    logging.info(f"Lucky dog: {lucky_dog}, Lucky cat: {lucky_cat}")
-                    client_indexes = [lucky_dog] + partial_client_indexes
+            # if len(set(phi)) == 1:
+            #     np.random.seed((round_idx + 1) * self.seed)
+            #     client_indexes = np.random.choice(
+            #         range(client_num_in_total), num_clients, replace=False
+            #     ).tolist()
+            # else:
+            #     sorted_indexes = np.argsort(phi, kind=random.choice([
+            #         'quicksort', 'mergesort', 'heapsort', 'stable'
+            #     ])).tolist()
+            #     client_indexes = sorted_indexes[-num_clients:]
+            #     if isinstance(ratio, float) and 0 < ratio < 1:
+            #         partial_client_indexes = copy.deepcopy(client_indexes)
+            #         random.seed(self.seed)
+            #         lucky_cat = random.choice(partial_client_indexes)
+            #         # lucky_cat = client_indexes[0]
+            #         partial_client_indexes.remove(lucky_cat)
+            #         lucky_dogs = sorted_indexes[:-num_clients] + [lucky_cat]
+            #         avg_prob = [(1 - ratio) / (len(lucky_dogs) - 1)] * (len(lucky_dogs) - 1) + [ratio]
+            #         lucky_dog = np.random.choice(lucky_dogs, replace=False, p=avg_prob)
+            #         logging.info(f"Lucky dog: {lucky_dog}, Lucky cat: {lucky_cat}")
+            #         client_indexes = [lucky_dog] + partial_client_indexes
 
         logging.info("client_indexes = %s" % str(client_indexes))
         return client_indexes
