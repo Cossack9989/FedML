@@ -426,7 +426,7 @@ class S_FedAvgAPI(object):
             P = []
             for idx in range(self.args.client_num_in_total):
                 if sampling_filter == "exp":
-                    P.append(np.exp(phi))
+                    P.append(np.exp(phi[idx]))
                 else:
                     P.append(1)
             _P = np.array(P) / np.sum(P)
