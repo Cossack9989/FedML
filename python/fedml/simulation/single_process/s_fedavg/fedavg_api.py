@@ -434,7 +434,7 @@ class S_FedAvgAPI(object):
                     P.append(np.exp(phi[idx]))
                 else:
                     P.append(1)
-            _P = np.array(P) / np.sum(P)
+            _P = np.array(P) / (np.sum(P) + 1e-13)
             client_indexes = np.random.choice(
                 range(client_num_in_total),
                 size=num_clients, replace=False, p=_P
