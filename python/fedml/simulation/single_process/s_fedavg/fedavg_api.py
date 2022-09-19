@@ -433,7 +433,7 @@ class S_FedAvgAPI(object):
             client_indexes = np.random.choice(
                 range(client_num_in_total),
                 size=num_clients, replace=False, p=_P
-            )
+            ).tolist()
 
             # if len(set(phi)) == 1:
             #     np.random.seed((round_idx + 1) * self.seed)
