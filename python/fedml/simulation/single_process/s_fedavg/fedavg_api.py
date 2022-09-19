@@ -150,6 +150,7 @@ class S_FedAvgAPI(object):
         res_dict = {}
         sv_dict = {}
         client_dict = {}
+        time_dict = {}
         phi = [1 / K] * K
         sv = [(1 - alpha) / (K * beta)] * K
 
@@ -232,7 +233,8 @@ class S_FedAvgAPI(object):
                 sv_approached = copy.deepcopy(sv_current)
                 logging.info(f"Approaching: {sv_approached}")
                 t_tail = time.time()
-                logging.info(f"[cost {t_tail - t_head}]")
+                t_cost = t_tail - t_head
+                logging.info(f"[cost {t_cost}]")
                 for idx in range(self.args.client_num_per_round):
                     client_idx = client_indexes[idx]
                     tmp_w_single = self._aggregate(copy.deepcopy([w_locals[idx]]))
@@ -312,7 +314,8 @@ class S_FedAvgAPI(object):
                     logging.info(f"Client {client_idx} sv={sv[client_idx]} phi={phi[client_idx]}")
 
                 t_tail = time.time()
-                logging.info(f"[cost {t_tail - t_head}]")
+                t_cost = t_tail - t_head
+                logging.info(f"[cost {t_cost}]")
 
             # update global weights
             w_global = self._aggregate(w_locals)
@@ -336,9 +339,11 @@ class S_FedAvgAPI(object):
 
             phi_dict[round_idx] = copy.deepcopy(phi)
             sv_dict[round_idx] = copy.deepcopy(sv)
+            time_dict[round_idx] = t_cost
         joblib.dump(phi_dict, ".tmp_phi.pkl")
         joblib.dump(res_dict, ".tmp_res.pkl")
         joblib.dump(sv_dict, ".tmp_sv.pkl")
+        joblib.dump(time_dict, ".tmp_time.pkl")
         joblib.dump(client_dict, ".tmp_client.pkl")
 
     def _validate_global_model(self, model: torch.nn.Module, data, device):
