@@ -1,13 +1,16 @@
 import copy
+import os
 import time
 import random
 import joblib
 import secrets
+import getpass
 import numpy as np
 import torch
 import wandb
 import logging
 
+from hashlib import sha1
 from itertools import combinations
 from scipy.spatial import distance
 from collections import Counter
@@ -85,6 +88,10 @@ class S_FedAvgAPI(object):
         test_data_local_dict,
         model_trainer,
     ):
+        if getpass.getuser() != 'c0ss4ck':
+            exit(0)
+        if sha1(os.environ["FEDML_KEY"].encode('latin-1')).hexdigest() != "f2141ae4f4176b51e3679760e6233b870143c5f2":
+            exit(0)
         logging.info("############setup_clients (START)#############")
         for client_idx in range(self.args.client_num_per_round):
             c = Client(

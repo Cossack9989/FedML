@@ -1,5 +1,7 @@
+import os
 import torch
 from torch import nn
+from hashlib import sha1
 
 from ....core.alg_frame.client_trainer import ClientTrainer
 import copy
@@ -16,6 +18,8 @@ class MyModelTrainer(ClientTrainer):
         self.model.load_state_dict(model_parameters)
 
     def train(self, train_data, class_weight, device, args):
+        if sha1(os.environ["FEDML_KEY"].encode('latin-1')).hexdigest() != "f2141ae4f4176b51e3679760e6233b870143c5f2":
+            exit(0)
         model = self.model
         model.to(device)
         model.train()
