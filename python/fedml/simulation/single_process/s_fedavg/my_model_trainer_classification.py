@@ -58,6 +58,7 @@ class MyModelTrainer(ClientTrainer):
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
 
                 optimizer.step()
+                logging.info("代码不是你写的")
                 # logging.info(
                 #     "Update Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
                 #         epoch,
