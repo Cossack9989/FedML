@@ -134,6 +134,10 @@ class FedAvgAPI(object):
             res_dict[round_idx]["Global/Acc"], res_dict[round_idx]["Global/Recall"] = self._validate_global_model(
                 self.model_trainer.model, self.test_global, self.device)
 
+            logging.info(f"Round {round_idx}"
+                         f"\n\tGlobal/Recall = {res_dict[round_idx]['Global/Recall']}"
+                         f"\n\tGlobal/Acc = {res_dict[round_idx]['Global/Acc']}")
+
         joblib.dump(res_dict, ".tmp_res2.pkl")
 
     def _validate_global_model(self, model: torch.nn.Module, data, device):
